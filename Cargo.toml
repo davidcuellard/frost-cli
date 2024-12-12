@@ -5,4 +5,9 @@ edition = "2021"
 
 [dependencies]
 frost-dalek = { git = "https://github.com/isislovecruft/frost-dalek.git" }
+rand = "0.7"
 clap = { version = "4.0", features = ["derive"] }
+
+[[example]]
+name = "frost_api_example"
+path = "examples/frost_api_example.rs"
