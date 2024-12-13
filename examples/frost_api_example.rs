@@ -122,11 +122,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .finish(carol.public_key().unwrap())
         .map_err(|_| "Carol group key failed")?;
 
+    // Ensure all participants derive the same group key
     assert!(alice_group_key == bob_group_key);
     assert!(carol_group_key == bob_group_key);
 
     let alice_public_key = alice_secret_key.to_public();
-    // let bob_public_key = bob_secret_key.to_public();
+    let _bob_public_key = _bob_secret_key.to_public();
     let carol_public_key = carol_secret_key.to_public();
 
     // ------------------------------------------------------------
@@ -139,8 +140,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (alice_public_comshares, mut alice_secret_comshares) =
         generate_commitment_share_lists(&mut OsRng, 1, 1);
-    // let (bob_public_comshares, mut bob_secret_comshares) =
-    //     generate_commitment_share_lists(&mut OsRng, 2, 1);
+    let (_bob_public_comshares, mut _bob_secret_comshares) =
+        generate_commitment_share_lists(&mut OsRng, 2, 1);
     let (carol_public_comshares, mut carol_secret_comshares) =
         generate_commitment_share_lists(&mut OsRng, 3, 1);
 
