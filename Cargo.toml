@@ -1,7 +1,7 @@
 [package]
 name = "frost_cli"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["davidcuellard https://github.com/davidcuellard"]
 repository = "https://github.com/davidcuellard/frost-dalek-cli"
 documentation = "https://docs.rs/frost-dalek-cli"
