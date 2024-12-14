@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "frost-dalek"
 version = "0.2.3"
-source = "git+https://github.com/isislovecruft/frost-dalek.git#9645caf8f2dd881b8bc7b62edc8a048344b71630"
+source = "git+https://github.com/davidcuellard/frost-dalek.git#fb2752be9c6f13c4d22d2ff0fed5f5edec16fe11"
 dependencies = [
  "curve25519-dalek",
  "rand",
@@ -166,6 +166,7 @@ name = "frost_cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "curve25519-dalek",
  "frost-dalek",
  "rand",
  "serde",
