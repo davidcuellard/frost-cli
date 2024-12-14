@@ -29,6 +29,8 @@ enum Commands {
         /// Total number of key shares to generate.
         #[arg(short, long, default_value = "5")]
         n: u32,
+        #[arg(short, long, default_value = "./results/frost_keys.json")]
+        output_key_file: String,
     },
     /// Sign a message using a threshold of private key shares.
     Sign {
@@ -66,14 +68,30 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Generate { t, n } => {
-            generate_keys(*t, *n).expect("Failed to generate keys");
+        Commands::Generate {
+            t,
+            n,
+            output_key_file,
+        } => {
+            generate_keys(*t, *n, output_key_file).expect("Failed to generate keys");
         }
-        Commands::Sign { message, t, n, key_file, signature_file } => {
-            sign_message(message, *t, *n, key_file, signature_file).expect("Failed to sign message");
+        Commands::Sign {
+            message,
+            t,
+            n,
+            key_file,
+            signature_file,
+        } => {
+            sign_message(message, *t, *n, key_file, signature_file)
+                .expect("Failed to sign message");
         }
-        Commands::Verify { message, key_file, signature_file } => {
-            validate_signature(message, key_file, signature_file).expect("Failed to verify signature");
+        Commands::Verify {
+            message,
+            key_file,
+            signature_file,
+        } => {
+            validate_signature(message, key_file, signature_file)
+                .expect("Failed to verify signature");
         }
     }
 }

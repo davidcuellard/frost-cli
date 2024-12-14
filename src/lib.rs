@@ -1,21 +1,20 @@
-use serde::{Deserialize, Serialize};
-use std::fs::File;
 use frost_dalek::signature::SecretKey as SignatureSecretKey;
-use frost_dalek::{
-    compute_message_hash, generate_commitment_share_lists, GroupKey, Parameters, DistributedKeyGeneration, Participant,
-    SignatureAggregator,
-};
-use serde_json::from_reader;
-use std::io::BufReader;
-use rand::rngs::OsRng;
 use frost_dalek::signature::ThresholdSignature;
-
-
+use frost_dalek::{
+    compute_message_hash, generate_commitment_share_lists, DistributedKeyGeneration, GroupKey,
+    Parameters, Participant, SignatureAggregator,
+};
+use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
+use serde_json::from_reader;
+use std::fs::File;
+use std::io::BufReader;
 
 #[derive(Serialize, Deserialize)]
 pub struct FrostKeys {
     pub group_key: [u8; 32],
     pub private_shares: Vec<([u8; 32], u32)>,
+    pub threshold: u32,
 }
 
 /// Generates a public key and private key shares using FROST.
@@ -26,10 +25,19 @@ pub struct FrostKeys {
 ///
 /// # Returns
 /// - Saves the keys to `./results/frost_keys.json` in JSON format.
-/// 
+///
 /// Generates the public key and private key shares.
-pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
-// Initialize the parameters for the key generation.
+pub fn generate_keys(
+    t: u32,
+    n: u32,
+    output_key_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // check if the threshold is less than the total number of participants
+    if t > n {
+        return Err("Threshold value cannot be greater than the total number of participants".into());
+    }
+
+    // Initialize the parameters for the key generation.
     let params = Parameters { t, n };
 
     // Step 1: Create participants and their polynomial coefficients.
@@ -149,10 +157,11 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
     let frost_keys = FrostKeys {
         group_key: group_keys[0].to_bytes(),
         private_shares,
+        threshold: t,
     };
 
     // Save the keys to a JSON file.
-    let file = File::create("./results/frost_keys.json")?;
+    let file = File::create(output_key_file)?;
     serde_json::to_writer_pretty(file, &frost_keys)?;
 
     println!("Generated {} shares with threshold {}. Keys saved.", n, t);
@@ -185,11 +194,19 @@ pub fn sign_message(
     // Step 2: Set up signing parameters
     let params = Parameters { t, n };
 
-    // Step 3: Load the group public key
+    // Step 3: Check if the provided `t` and `n` match the key file
+    if frost_keys.private_shares.len() != n as usize {
+        return Err("Number of participants does not match the key file".into());
+    }
+    if frost_keys.threshold > t {
+        return Err("Threshold does not match the key file".into());
+    }
+
+    // Step 4: Load the group public key
     let group_key =
         GroupKey::from_bytes(frost_keys.group_key).map_err(|_| "Invalid group public key")?;
 
-    // Step 4: Reconstruct secret keys from the key file
+    // Step 5: Reconstruct secret keys from the key file
     let mut secret_keys = Vec::new();
     for (key_bytes, index) in &frost_keys.private_shares {
         let secret_key = SignatureSecretKey::from_bytes(*index, *key_bytes)
@@ -197,10 +214,15 @@ pub fn sign_message(
         secret_keys.push(secret_key);
     }
 
-    // Step 5: Choose `t` signers for threshold signing
+    // Step 6: Ensure there are enough secret keys for the threshold
+    if secret_keys.len() <= t as usize {
+        return Err("Not enough secret keys for the threshold".into());
+    }
+
+    // Step 7: Choose `t` signers for threshold signing
     let signers = &secret_keys[0..(t as usize)];
 
-    // Step 6: Generate commitment shares for the chosen signers
+    // Step 8: Generate commitment shares for the chosen signers
     let mut public_comshares = Vec::new();
     let mut secret_comshares = Vec::new();
     for signer in signers {
@@ -209,31 +231,31 @@ pub fn sign_message(
         secret_comshares.push((signer.get_index(), sec_com));
     }
 
-    // Step 7: Hash the message to create a signing context
+    // Step 9: Hash the message to create a signing context
     let context = b"THRESHOLD SIGNING CONTEXT";
     let message_bytes = message.as_bytes();
     let message_hash = compute_message_hash(&context[..], &message_bytes[..]);
 
-    // Step 8: Initialize a signature aggregator
+    // Step 10: Initialize a signature aggregator
     let mut aggregator =
         SignatureAggregator::new(params, group_key, &context[..], &message_bytes[..]);
 
-    // Step 9: Include signers and their commitment shares in the aggregator
+    // Step 11: Include signers and their commitment shares in the aggregator
     for (signer, (index, pub_com)) in signers.iter().zip(public_comshares.iter()) {
         let public_key = signer.to_public();
         aggregator.include_signer(*index, pub_com.commitments[0], public_key);
     }
 
-    // Step 10: Get the list of participating signers
+    // Step 12: Get the list of participating signers
     let signers = aggregator.get_signers().clone();
 
-    // Step 11: Create and include partial signatures
+    // Step 13: Create and include partial signatures
     for (secret_key, (_, sec_com)) in secret_keys.iter().zip(secret_comshares.iter_mut()) {
         let partial_sig = secret_key.sign(&message_hash, &group_key, sec_com, 0, &signers)?;
         aggregator.include_partial_signature(partial_sig);
     }
 
-    // Step 12: Finalize and aggregate the threshold signature
+    // Step 14: Finalize and aggregate the threshold signature
     let aggregator = aggregator.finalize().map_err(|err| {
         let error_message = format!("Failed to finalize aggregator: {:?}", err);
         Box::<dyn std::error::Error>::from(error_message)
@@ -244,14 +266,13 @@ pub fn sign_message(
         Box::<dyn std::error::Error>::from(error_message)
     })?;
 
-    // Step 13: Save the signature as a JSON file
+    // Step 15: Save the signature as a JSON file
     let file = File::create(signature_file)?;
     serde_json::to_writer_pretty(file, &threshold_signature.to_bytes().to_vec())?;
 
     println!("Threshold signature saved to: {}", signature_file);
     Ok(())
 }
-
 
 /// Validates a threshold signature for a given message.
 ///
