@@ -1,19 +1,12 @@
 //! A CLI utility for demonstrating FROST threshold signatures.
-//! 
+//!
 //! This tool supports:
 //! - Generating a public key and private key shares.
 //! - Signing a message using a threshold of private key shares.
 //! - Verifying a signature using the public key.
 
-mod keygen;
-mod sign;
-mod verify;
-mod types;
-
 use clap::{Parser, Subcommand};
-use keygen::generate_keys;
-use sign::sign_message;
-use verify::validate_signature;
+use frost_cli::{generate_keys, sign_message, validate_signature};
 
 /// Defines the structure for the CLI interface.
 #[derive(Parser)]
@@ -69,39 +62,18 @@ enum Commands {
     },
 }
 
-/// Entry point for the CLI utility.
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse CLI arguments.
+fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        // Handle key generation command.
         Commands::Generate { t, n } => {
-            println!("Generating keys...");
-            generate_keys(*t, *n)?;
+            generate_keys(*t, *n).expect("Failed to generate keys");
         }
-        // Handle message signing command.
-        Commands::Sign {
-            message,
-            t,
-            n,
-            key_file,
-            signature_file,
-        } => {
-            println!("Signing message: {}", message);
-            sign_message(&message, *t, *n, key_file, signature_file)?;
+        Commands::Sign { message, t, n, key_file, signature_file } => {
+            sign_message(message, *t, *n, key_file, signature_file).expect("Failed to sign message");
         }
-        // Handle signature verification command.
-        Commands::Verify {
-            message,
-            key_file,
-            signature_file,
-        } => {
-            println!("Verifying signature for message: {}", message);
-            println!("Using signature file: {}", signature_file);
-            validate_signature(&message, key_file, signature_file)?;
+        Commands::Verify { message, key_file, signature_file } => {
+            validate_signature(message, key_file, signature_file).expect("Failed to verify signature");
         }
     }
-
-    Ok(())
 }
