@@ -83,7 +83,7 @@ cargo run -- verify --message "hi, this is a test" --key-file "./results/frost_k
 ## Example Workflow
 1. Generate keys:
    ```bash
-   cargo run -- generate --t 3 --n 5
+   cargo run -- generate --t 3 --n 5 --output-key-file "./results/frost_keys.json"
    ```
 2. Sign a message:
    ```bash
@@ -95,14 +95,23 @@ cargo run -- verify --message "hi, this is a test" --key-file "./results/frost_k
    ```
 
 ## Project Structure
-- `main.rs`: CLI entry point.
-- `keygen.rs`: Key generation logic.
-- `sign.rs`: Message signing logic.
-- `verify.rs`: Signature verification logic.
-- `types.rs`: Data structures for key management.
+- `src/main.rs`: CLI entry point.
+- `src/lib.rs`: Logic for Key generation, Message signing and Signature verification.
+- `tests/test.rs`: Unit testing for key generation, message signing, and signature verification, ensuring the functionality works as expected.
 
 # Docs
 Run
    ```bash
     cargo doc --open
   ```
+
+
+## Changes to `isislovecruft/frost-dalek`
+
+- The `SecretKey` struct has been modified to include serialization and deserialization support.
+  - The `index` and `key` fields are private (pub(crate)), preventing direct serialization or reconstruction outside the module.
+  The following methods have been added to facilitate serialization and deserialization:
+
+    - `to_bytes`: Serializes the `SecretKey` to bytes, returning a tuple containing the scalar key as bytes and the index.
+    - `from_bytes`: Deserializes the `SecretKey` from bytes, taking an index and scalar key bytes as input and returning a `Result` with the `SecretKey` or an error message.
+    - `get_index`: A getter method for retrieving the participant index.
