@@ -1,5 +1,9 @@
 use clap::{Parser, Subcommand};
+use curve25519_dalek::ristretto::CompressedRistretto;
+use curve25519_dalek::scalar::Scalar;
 use frost_dalek::signature::SecretKey as SignatureSecretKey;
+// use frost_dalek::signature::SerializableThresholdSignature;
+use frost_dalek::signature::ThresholdSignature;
 use frost_dalek::{
     compute_message_hash, generate_commitment_share_lists, DistributedKeyGeneration, GroupKey,
     Parameters, Participant, SignatureAggregator,
@@ -43,12 +47,16 @@ enum Commands {
         n: u32,
         #[arg(short, long, default_value = "./results/frost_keys.json")]
         key_file: String,
+        #[arg(short, long, default_value = "./results/signature.json")]
+        signature_file: String,
     },
     /// Verify a signature using the public key
     Verify {
         #[arg(short, long)]
         message: String,
-        #[arg(short, long)]
+        #[arg(short, long, default_value = "./results/frost_keys.json")]
+        key_file: String,
+        #[arg(short, long, default_value = "./results/signature.json")]
         signature_file: String,
     },
 }
@@ -66,16 +74,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             t,
             n,
             key_file,
+            signature_file,
         } => {
             println!("Signing message: {}", message);
-            sign_message(&message, *t, *n, key_file)?;
+            sign_message(&message, *t, *n, key_file, signature_file)?;
         }
         Commands::Verify {
             message,
+            key_file,
             signature_file,
         } => {
             println!("Verifying signature for message: {}", message);
             println!("Using signature file: {}", signature_file);
+            validate_signature(&message, key_file, signature_file)?;
         }
     }
 
@@ -221,6 +232,7 @@ fn sign_message(
     t: u32,
     n: u32,
     key_file: &str,
+    signature_file: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Load keys from file
     let file = File::open(key_file)?;
@@ -241,6 +253,7 @@ fn sign_message(
             .map_err(|_| "Invalid private key bytes")?;
         secret_keys.push(secret_key);
     }
+
     // Step 5: Select the first `t` participants as signers
     let signers = &secret_keys[0..(t as usize)];
 
@@ -288,12 +301,52 @@ fn sign_message(
         Box::<dyn std::error::Error>::from(error_message)
     })?;
 
-    // Step 13: Verify the signature
+    // Step 13: Save the signature to a file
+    let file = File::create(signature_file)?;
+    serde_json::to_writer_pretty(file, &threshold_signature.to_bytes().to_vec())?;
+
+    println!("Threshold signature saved to: {}", signature_file);
+    Ok(())
+}
+
+fn validate_signature(
+    message: &str,
+    key_file: &str,
+    signature_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Step 1: Load the signature from file
+    let signature_file = File::open(signature_file)?;
+    let signature_reader = BufReader::new(signature_file);
+    let signature_vec: Vec<u8> = serde_json::from_reader(signature_reader)?;
+    if signature_vec.len() != 64 {
+        return Err("Invalid length for threshold signature".into());
+    }
+    let signature_bytes: [u8; 64] = signature_vec
+        .try_into()
+        .map_err(|_| "Failed to convert to [u8; 64]")?;
+
+    // Deserialize the signature
+    let threshold_signature = ThresholdSignature::from_bytes(signature_bytes)
+        .map_err(|_| "Failed to deserialize ThresholdSignature")?;
+
+    // Step 2: Load the public group key from the key file
+    let key_file = File::open(key_file)?;
+    let key_reader = BufReader::new(key_file);
+    let frost_keys: FrostKeys = serde_json::from_reader(key_reader)?;
+
+    let group_key =
+        GroupKey::from_bytes(frost_keys.group_key).map_err(|_| "Invalid group public key")?;
+
+    // Step 3: Compute the message hash
+    let context = b"THRESHOLD SIGNING CONTEXT";
+    let message_bytes = message.as_bytes();
+    let message_hash = compute_message_hash(&context[..], &message_bytes[..]);
+
+    // Step 4: Verify the threshold signature
     threshold_signature
         .verify(&group_key, &message_hash)
         .map_err(|_| "Signature verification failed")?;
 
-    println!("Threshold signature is valid!");
-
+    println!("Signature is valid!");
     Ok(())
 }

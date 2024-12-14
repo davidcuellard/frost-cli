@@ -136,6 +136,7 @@ dependencies = [
  "byteorder",
  "digest",
  "rand_core",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -152,10 +153,11 @@ dependencies = [
 [[package]]
 name = "frost-dalek"
 version = "0.2.3"
-source = "git+https://github.com/davidcuellard/frost-dalek.git#fb2752be9c6f13c4d22d2ff0fed5f5edec16fe11"
+source = "git+https://github.com/davidcuellard/frost-dalek.git#ea976b224cda430a4a49e9d4e32675aef5f72177"
 dependencies = [
  "curve25519-dalek",
  "rand",
+ "serde",
  "sha2",
  "subtle",
  "zeroize",
