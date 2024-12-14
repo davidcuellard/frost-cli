@@ -38,8 +38,8 @@ enum Commands {
         #[arg(short, long)]
         message: String,
         /// Threshold value for signing.
-        #[arg(short, long, default_value = "3")]
-        t: u32,
+        #[arg(short = 'i', long, default_value = "1,2,3")]
+        signers: String,
         /// Total number of participants.
         #[arg(short, long, default_value = "5")]
         n: u32,
@@ -47,7 +47,7 @@ enum Commands {
         #[arg(short, long, default_value = "./results/frost_keys.json")]
         key_file: String,
         /// Path to save the resulting signature.
-        #[arg(short, long, default_value = "./results/signature.json")]
+        #[arg(short = 'f', long, default_value = "./results/signature.json")]
         signature_file: String,
     },
     /// Verify a signature using the public key.
@@ -77,12 +77,16 @@ fn main() {
         }
         Commands::Sign {
             message,
-            t,
+            signers,
             n,
             key_file,
             signature_file,
         } => {
-            sign_message(message, *t, *n, key_file, signature_file)
+            let signers: Vec<u32> = signers
+                .split(',')
+                .map(|s| s.parse().expect("Invalid signer index"))
+                .collect();
+            sign_message(message, signers, *n, key_file, signature_file)
                 .expect("Failed to sign message");
         }
         Commands::Verify {
