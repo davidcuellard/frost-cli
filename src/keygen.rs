@@ -1,22 +1,31 @@
+//! Generates a public key and private key shares using FROST.
+//!
+//! # Parameters
+//! - `t`: Threshold value, the minimum number of participants required to reconstruct the private key.
+//! - `n`: Total number of participants (key shares).
+//!
+//! # Returns
+//! - Saves the keys to `./results/frost_keys.json` in JSON format.
+
 use crate::types::FrostKeys;
 use frost_dalek::{DistributedKeyGeneration, Parameters, Participant};
 use std::fs::File;
 
+/// Generates the public key and private key shares.
 pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
-    // Define parameters
+    // Initialize the parameters for the key generation.
     let params = Parameters { t, n };
 
-    // Step 1: Generate participants and coefficients
+    // Step 1: Create participants and their polynomial coefficients.
     let mut participants = Vec::new();
     let mut coefficients = Vec::new();
-
     for i in 1..=n {
         let (participant, coeff) = Participant::new(&params, i);
         participants.push(participant);
         coefficients.push(coeff);
     }
 
-    // Step 2: Verify zk proof of secret keys
+    // Step 2: Verify zero-knowledge proof of secret keys for all participants.
     for participant in &participants {
         participant
             .proof_of_secret_key
@@ -28,13 +37,11 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
                 )
             })?;
     }
-
     println!("All participants verified their proofs of secret keys!");
 
-    // Step 3: Perform Distributed Key Generation (Round 1)
+    // Step 3: Perform the first round of Distributed Key Generation (DKG).
     let mut dkg_states = Vec::new();
     let mut all_secret_shares = Vec::new();
-
     for (i, participant) in participants.iter().enumerate() {
         let mut other_participants = participants.clone();
         other_participants.remove(i);
@@ -65,12 +72,10 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
         dkg_states.push(participant_state);
         all_secret_shares.push(participant_their_secret_shares);
     }
-
     println!("DKG Round 1 complete");
 
-    // Step 4: Share Secret Shares (Round 2)
+    // Step 4: Share secret shares and complete Round 2 of DKG.
     let mut dkg_states_round_two = Vec::new();
-
     for (i, dkg_state) in dkg_states.into_iter().enumerate() {
         let my_secret_shares: Vec<_> = all_secret_shares
             .iter()
@@ -82,6 +87,7 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
             })
             .collect();
 
+        // Ensure the correct number of shares are received.
         if my_secret_shares.len() != (params.n - 1) as usize {
             return Err(format!(
                 "Participant {} received incorrect number of shares: expected {}, got {}",
@@ -98,13 +104,11 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
 
         dkg_states_round_two.push(round_two_state);
     }
-
     println!("Share secret shares Round 2 complete");
 
-    // Step 5: Finish DKG and save keys
+    // Step 5: Finalize DKG and save the keys.
     let mut group_keys = Vec::new();
     let mut private_shares = Vec::new();
-
     for (i, dkg_state) in dkg_states_round_two.iter().enumerate() {
         let (dkg_group_key, dkg_secret_key) = dkg_state
             .clone()
@@ -119,16 +123,19 @@ pub fn generate_keys(t: u32, n: u32) -> Result<(), Box<dyn std::error::Error>> {
         group_keys.push(dkg_group_key);
         private_shares.push(dkg_secret_key.to_bytes());
 
+        // Ensure all group keys are identical.
         if i > 0 {
             assert_eq!(dkg_group_key, group_keys[i - 1]);
         }
     }
 
+    // Combine group key and private shares into a single structure.
     let frost_keys = FrostKeys {
         group_key: group_keys[0].to_bytes(),
         private_shares,
     };
 
+    // Save the keys to a JSON file.
     let file = File::create("./results/frost_keys.json")?;
     serde_json::to_writer_pretty(file, &frost_keys)?;
 
